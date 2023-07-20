@@ -2,12 +2,15 @@ import express from "express";
 import sql from "mssql";
 import helmet from "helmet";
 import { auth } from "express-oauth2-jwt-bearer";
-import { errorHandler } from "./middleware";
+import { addUserId, errorHandler } from "./middleware";
 import bodyParser from "body-parser";
 import deck from "./routes/deck";
 import card from "./routes/card";
 import category from "./routes/category";
 import echo from "./routes/echo";
+import tag from "./routes/tag";
+import profile from "./routes/profile";
+import userRoute from "./routes/user";
 
 const app = express();
 
@@ -36,6 +39,7 @@ const jwtCheck = auth({
 app.use(helmet());
 app.use(jwtCheck);
 app.use(bodyParser.json());
+app.use(addUserId);
 
 const appPool = new sql.ConnectionPool({
   user,
@@ -57,6 +61,9 @@ appPool
     app.use("/card", card);
     app.use("/category", category);
     app.use("/echo", echo);
+    app.use("/tag", tag);
+    app.use("/profile", profile);
+    app.use("/user", userRoute);
 
     // error handling
     app.use(errorHandler);

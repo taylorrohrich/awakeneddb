@@ -21,12 +21,19 @@ router.get(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("Cost", sql.BigInt, cost)
+        .input("Cost", sql.Int, cost)
         .input("RarityName", sql.NVarChar(200), rarity)
         .input("TypeName", sql.NVarChar(200), type)
         .execute<Record<string, unknown>[]>("spCard_List")
         .then((result) => {
-          return res.send(result.recordsets[0]);
+          const cards = result.recordsets[0];
+          const parsedCards = cards.map((card) => ({
+            ...card,
+            types: (card.types as string | undefined)
+              ? JSON.parse(card.types as string)
+              : [],
+          }));
+          return res.send(parsedCards);
         })
         .catch((err) => {
           logError(err);
@@ -49,7 +56,7 @@ router.get(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("CardId", sql.BigInt, cardId)
+        .input("CardId", sql.Int, cardId)
         .execute<Record<string, unknown>[]>("spCard_Get")
         .then((result) => {
           const [[card], types] = result.recordsets;

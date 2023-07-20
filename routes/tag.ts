@@ -1,6 +1,6 @@
 import express from "express";
 import sql from "mssql";
-import { validationResult, param, matchedData } from "express-validator";
+import { matchedData, param, validationResult } from "express-validator";
 import { Errors } from "../types";
 import { logError } from "../helpers";
 
@@ -15,7 +15,7 @@ router.get("/list", (req, res, next) => {
     req.db
       .request()
       .input("Auth0Id", sql.NVarChar(200), userId)
-      .execute<Record<string, unknown>[]>("spEcho_List")
+      .execute<Record<string, unknown>[]>("spTag_List")
       .then((result) => {
         return res.send(result.recordsets[0]);
       })
@@ -29,22 +29,22 @@ router.get("/list", (req, res, next) => {
 });
 
 router.get(
-  "/:echoId",
-  param("echoId").notEmpty().isNumeric(),
+  "/:tagId",
+  param("tagId").notEmpty().isNumeric(),
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
       const userId = req.userId;
-      const { echoId } = matchedData(req);
+      const { tagId } = matchedData(req);
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("EchoId", sql.Int, echoId)
-        .execute<Record<string, unknown>[]>("spEcho_Get")
+        .input("TagId", sql.Int, tagId)
+        .execute<Record<string, unknown>[]>("spTag_Get")
         .then((result) => {
           const echo = result.recordset[0];
           if (!echo) {
-            return res.status(404).send({ errors: ["Echo not found"] });
+            return res.status(404).send({ errors: ["Tag not found"] });
           }
           return res.send(echo);
         })

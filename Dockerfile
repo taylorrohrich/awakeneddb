@@ -9,6 +9,7 @@ COPY middleware.ts ./
 COPY tsconfig.json ./
 COPY types.ts ./
 COPY routes ./routes
+COPY profanity_corpus.ts ./
 RUN npm run build
 
 FROM node:18 as start
@@ -18,4 +19,4 @@ COPY package*.json ./
 COPY --from=build /app/build ./
 RUN npm install --production
 EXPOSE 8080
-CMD [ "node", "index.js" ]
+CMD [ "forever", "start", "index.js" ]

@@ -9,7 +9,13 @@ import {
 } from "express-validator";
 import { authenticated } from "../middleware";
 import { Errors } from "../types";
-import { logError } from "../helpers";
+import {
+  durationValidator,
+  isTextExplicit,
+  limitValidator,
+  logError,
+  parseDeckResponse,
+} from "../helpers";
 const router = express.Router();
 
 /// Unauthenticated routes
@@ -17,21 +23,31 @@ const router = express.Router();
 router.get(
   "/list",
   query("page").notEmpty().isNumeric(),
-  query("limit").notEmpty().isNumeric(),
+  query("limit").notEmpty().isNumeric().custom(limitValidator),
+  query("duration").optional().isNumeric().custom(durationValidator),
+  query("costLow").optional().isNumeric(),
+  query("costHigh").optional().isNumeric(),
+  query("tagId").optional().isNumeric(),
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
-      const { page, limit } = matchedData(req);
+      const { page, limit, duration, costLow, costHigh, tagId } =
+        matchedData(req);
       const userId = req.userId;
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("page", sql.BigInt, page)
-        .input("limit", sql.BigInt, limit)
+        .input("Page", sql.Int, page)
+        .input("Limit", sql.Int, limit)
+        .input("Duration", sql.Int, duration)
+        .input("CostLow", sql.Int, costLow)
+        .input("CostHigh", sql.Int, costHigh)
+        .input("TagId", sql.Int, tagId)
         .execute<Record<string, unknown>[]>("spDeck_List")
         .then((result) => {
-          const [[pagination], data] = result.recordsets;
-          return res.send({ ...pagination, data });
+          const [[pagination], data = []] = result.recordsets;
+          const parsedData = data.map((deck) => parseDeckResponse(deck));
+          return res.send({ ...pagination, data: parsedData });
         })
         .catch((err) => {
           logError(err);
@@ -54,14 +70,47 @@ router.get(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("deckId", sql.BigInt, deckId)
+        .input("deckId", sql.Int, deckId)
         .execute<Record<string, unknown>[]>("spDeck_Get")
         .then((result) => {
           const deck = result.recordset[0];
           if (!deck) {
             return res.status(404).send({ errors: ["Deck not found"] });
           }
-          res.send(deck);
+
+          res.send(parseDeckResponse(deck));
+        })
+        .catch((err) => {
+          logError(err);
+          next(Errors.Database);
+        });
+    } else {
+      res.status(400).send({ errors: errors.array() });
+    }
+  }
+);
+
+router.get(
+  "/user/:userId/list",
+  param("userId").notEmpty().isNumeric(),
+  query("page").notEmpty().isNumeric(),
+  query("limit").notEmpty().isNumeric().custom(limitValidator),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+      const { page, limit, userId } = matchedData(req);
+      const auth0Id = req.userId;
+      req.db
+        .request()
+        .input("Auth0Id", sql.NVarChar(200), auth0Id)
+        .input("Page", sql.Int, page)
+        .input("Limit", sql.Int, limit)
+        .input("SearchUserId", sql.Int, userId)
+        .execute<Record<string, unknown>[]>("spDeck_List")
+        .then((result) => {
+          const [[pagination], data = []] = result.recordsets;
+          const parsedData = data.map((deck) => parseDeckResponse(deck));
+          return res.send({ ...pagination, data: parsedData });
         })
         .catch((err) => {
           logError(err);
@@ -75,23 +124,106 @@ router.get(
 
 // Authenticated routes
 
-router.post(
-  "/",
+router.get(
+  "/profile/list",
   authenticated,
-  body("name").notEmpty(),
-  body("categoryId").notEmpty().isNumeric(),
+  query("page").notEmpty().isNumeric(),
+  query("limit").notEmpty().isNumeric().custom(limitValidator),
+
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
-      const { name, categoryId } = matchedData(req);
+      const { page, limit } = matchedData(req);
       const userId = req.userId;
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
+        .input("Page", sql.Int, page)
+        .input("Limit", sql.Int, limit)
+        .execute<Record<string, unknown>[]>("spProfile_DeckList")
+        .then((result) => {
+          const [[pagination], data = []] = result.recordsets;
+          const parsedData = data.map((deck) => parseDeckResponse(deck));
+          return res.send({ ...pagination, data: parsedData });
+        })
+        .catch((err) => {
+          logError(err);
+          next(Errors.Database);
+        });
+    } else {
+      res.status(400).send({ errors: errors.array() });
+    }
+  }
+);
+
+router.post(
+  "/",
+  authenticated,
+  body("name").notEmpty(),
+  body("tagId").notEmpty().isNumeric(),
+  body("echoId").notEmpty().isNumeric(),
+  body("description").notEmpty(),
+  body("magicCardOneId").notEmpty().isNumeric(),
+  body("magicCardTwoId").notEmpty().isNumeric(),
+  body("magicCardThreeId").notEmpty().isNumeric(),
+  body("magicCardFourId").notEmpty().isNumeric(),
+  body("magicCardFiveId").notEmpty().isNumeric(),
+  body("magicCardSixId").notEmpty().isNumeric(),
+  body("magicCardSevenId").notEmpty().isNumeric(),
+  body("magicCardEightId").notEmpty().isNumeric(),
+  body("companionCardOneId").notEmpty().isNumeric(),
+  body("companionCardTwoId").notEmpty().isNumeric(),
+  body("companionCardThreeId").notEmpty().isNumeric(),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+      const {
+        name,
+        tagId,
+        echoId,
+        description,
+        magicCardOneId,
+        magicCardTwoId,
+        magicCardThreeId,
+        magicCardFourId,
+        magicCardFiveId,
+        magicCardSixId,
+        magicCardSevenId,
+        magicCardEightId,
+        companionCardOneId,
+        companionCardTwoId,
+        companionCardThreeId,
+      } = matchedData(req);
+      const userId = req.userId;
+
+      const isExplicit = isTextExplicit(name) || isTextExplicit(description);
+      if (isExplicit) {
+        return res
+          .status(400)
+          .send({ errors: ["Name / Description must not include profanity"] });
+      }
+      req.db
+        .request()
+        .input("Auth0Id", sql.NVarChar(200), userId)
         .input("Name", sql.NVarChar(200), name)
-        .input("CategoryId", sql.BigInt, categoryId)
+        .input("TagId", sql.Int, tagId)
+        .input("EchoId", sql.Int, echoId)
+        .input("Description", sql.NVarChar(4000), description)
+        .input("MagicCardOneId", sql.Int, magicCardOneId)
+        .input("MagicCardTwoId", sql.Int, magicCardTwoId)
+        .input("MagicCardThreeId", sql.Int, magicCardThreeId)
+        .input("MagicCardFourId", sql.Int, magicCardFourId)
+        .input("MagicCardFiveId", sql.Int, magicCardFiveId)
+        .input("MagicCardSixId", sql.Int, magicCardSixId)
+        .input("MagicCardSevenId", sql.Int, magicCardSevenId)
+        .input("MagicCardEightId", sql.Int, magicCardEightId)
+        .input("CompanionCardOneId", sql.Int, companionCardOneId)
+        .input("CompanionCardTwoId", sql.Int, companionCardTwoId)
+        .input("CompanionCardThreeId", sql.Int, companionCardThreeId)
         .execute("spDeck_Add")
-        .then((result) => res.send({ success: !!result.returnValue }))
+        .then((result) => {
+          return res.send({ success: !!result.returnValue });
+        })
         .catch((err) => {
           logError(err);
           next(Errors.Database);
@@ -107,23 +239,67 @@ router.put(
   authenticated,
   param("deckId").notEmpty().isNumeric(),
   body("name").notEmpty(),
-  body("categoryId").notEmpty().isNumeric(),
-  body("echoId").optional().isNumeric(),
-  body("description").optional(),
+  body("tagId").notEmpty().isNumeric(),
+  body("echoId").notEmpty().isNumeric(),
+  body("description").notEmpty(),
+  body("magicCardOneId").notEmpty().isNumeric(),
+  body("magicCardTwoId").notEmpty().isNumeric(),
+  body("magicCardThreeId").notEmpty().isNumeric(),
+  body("magicCardFourId").notEmpty().isNumeric(),
+  body("magicCardFiveId").notEmpty().isNumeric(),
+  body("magicCardSixId").notEmpty().isNumeric(),
+  body("magicCardSevenId").notEmpty().isNumeric(),
+  body("magicCardEightId").notEmpty().isNumeric(),
+  body("companionCardOneId").notEmpty().isNumeric(),
+  body("companionCardTwoId").notEmpty().isNumeric(),
+  body("companionCardThreeId").notEmpty().isNumeric(),
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
-      const { name, categoryId, echoId, description, deckId } =
-        matchedData(req);
+      const {
+        deckId,
+        name,
+        tagId,
+        echoId,
+        description,
+        magicCardOneId,
+        magicCardTwoId,
+        magicCardThreeId,
+        magicCardFourId,
+        magicCardFiveId,
+        magicCardSixId,
+        magicCardSevenId,
+        magicCardEightId,
+        companionCardOneId,
+        companionCardTwoId,
+        companionCardThreeId,
+      } = matchedData(req);
+      const isExplicit = isTextExplicit(name) || isTextExplicit(description);
+      if (isExplicit) {
+        return res
+          .status(400)
+          .send({ errors: ["Name / Description must not include profanity"] });
+      }
       const userId = req.userId;
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("deckId", sql.BigInt, deckId)
+        .input("DeckId", sql.Int, deckId)
         .input("Name", sql.NVarChar(200), name)
-        .input("CategoryId", sql.BigInt, categoryId)
-        .input("EchoId", sql.BigInt, echoId)
-        .input("Description", sql.NVarChar(2000), description)
+        .input("TagId", sql.Int, tagId)
+        .input("EchoId", sql.Int, echoId)
+        .input("Description", sql.NVarChar(4000), description)
+        .input("MagicCardOneId", sql.Int, magicCardOneId)
+        .input("MagicCardTwoId", sql.Int, magicCardTwoId)
+        .input("MagicCardThreeId", sql.Int, magicCardThreeId)
+        .input("MagicCardFourId", sql.Int, magicCardFourId)
+        .input("MagicCardFiveId", sql.Int, magicCardFiveId)
+        .input("MagicCardSixId", sql.Int, magicCardSixId)
+        .input("MagicCardSevenId", sql.Int, magicCardSevenId)
+        .input("MagicCardEightId", sql.Int, magicCardEightId)
+        .input("CompanionCardOneId", sql.Int, companionCardOneId)
+        .input("CompanionCardTwoId", sql.Int, companionCardTwoId)
+        .input("CompanionCardThreeId", sql.Int, companionCardThreeId)
         .execute("spDeck_Update")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -148,7 +324,7 @@ router.delete(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("DeckId", sql.BigInt, deckId)
+        .input("DeckId", sql.Int, deckId)
         .execute<Record<string, unknown>[]>("spDeck_Remove")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -175,9 +351,9 @@ router.post(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("DeckId", sql.BigInt, deckId)
-        .input("CardId", sql.BigInt, cardId)
-        .input("Position", sql.BigInt, position)
+        .input("DeckId", sql.Int, deckId)
+        .input("CardId", sql.Int, cardId)
+        .input("Position", sql.Int, position)
         .execute("spDeckCard_Add")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -203,8 +379,8 @@ router.put(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("DeckCardId", sql.BigInt, deckCardId)
-        .input("CardId", sql.BigInt, cardId)
+        .input("DeckCardId", sql.Int, deckCardId)
+        .input("CardId", sql.Int, cardId)
         .execute("spDeckCard_Update")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -229,7 +405,7 @@ router.delete(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("DeckCardId", sql.BigInt, deckCardId)
+        .input("DeckCardId", sql.Int, deckCardId)
         .execute("spDeckCard_Remove")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -246,17 +422,15 @@ router.post(
   "/:deckId/vote",
   authenticated,
   param("deckId").notEmpty().isNumeric(),
-  body("upvote").notEmpty().isBoolean(),
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
-      const { deckId, upvote } = matchedData(req);
+      const { deckId } = matchedData(req);
       const userId = req.userId;
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("DeckId", sql.BigInt, deckId)
-        .input("Upvote", sql.TinyInt, upvote)
+        .input("DeckId", sql.Int, deckId)
         .execute("spVote_Add")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {
@@ -269,46 +443,19 @@ router.post(
   }
 );
 
-router.put(
-  "/vote/:voteId",
-  authenticated,
-  param("voteId").notEmpty().isNumeric(),
-  body("upvote").notEmpty().isBoolean(),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (errors.isEmpty()) {
-      const { voteId, upvote } = matchedData(req);
-      const userId = req.userId;
-      req.db
-        .request()
-        .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("VoteId", sql.BigInt, voteId)
-        .input("Upvote", sql.TinyInt, upvote)
-        .execute("spVote_Update")
-        .then((result) => res.send({ success: !!result.returnValue }))
-        .catch((err) => {
-          logError(err);
-          next(Errors.Database);
-        });
-    } else {
-      res.status(400).send({ errors: errors.array() });
-    }
-  }
-);
-
 router.delete(
-  "/vote/:voteId",
+  "/:deckId/vote",
   authenticated,
-  param("voteId").notEmpty().isNumeric(),
+  param("deckId").notEmpty().isNumeric(),
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) {
-      const { voteId } = matchedData(req);
+      const { deckId } = matchedData(req);
       const userId = req.userId;
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("VoteId", sql.BigInt, voteId)
+        .input("DeckId", sql.Int, deckId)
         .execute("spVote_Remove")
         .then((result) => res.send({ success: !!result.returnValue }))
         .catch((err) => {

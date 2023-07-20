@@ -39,7 +39,7 @@ router.get(
       req.db
         .request()
         .input("Auth0Id", sql.NVarChar(200), userId)
-        .input("CategoryId", sql.BigInt, categoryId)
+        .input("CategoryId", sql.Int, categoryId)
         .execute<Record<string, unknown>[]>("spCategory_Get")
         .then((result) => {
           const echo = result.recordset[0];

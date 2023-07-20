@@ -5,6 +5,10 @@ export function authenticated(req: Request, res: Response, next: NextFunction) {
   if (!req.auth) {
     next(Errors.Authentication);
   }
+  next();
+}
+
+export function addUserId(req: Request, res: Response, next: NextFunction) {
   req.userId = req.auth?.payload.sub;
   next();
 }
