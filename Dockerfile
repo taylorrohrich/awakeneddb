@@ -18,5 +18,6 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=build /app/build ./
 RUN npm install --production
+RUN npm install forever -g
 EXPOSE 8080
-CMD [ "forever", "start", "index.js" ]
+CMD [ "forever", "index.js","8080" ]
