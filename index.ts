@@ -22,8 +22,17 @@ const server = process.env.Server;
 const database = process.env.Database;
 const user = process.env.User;
 const password = process.env.Password;
+const userSyncSecret = process.env.UserSyncSecret;
 
-if (!server || !database || !user || !password || !audience || !issuerBaseURL) {
+if (
+  !server ||
+  !database ||
+  !user ||
+  !password ||
+  !audience ||
+  !issuerBaseURL ||
+  !userSyncSecret
+) {
   console.error("env vars missing");
   throw Error();
 }
