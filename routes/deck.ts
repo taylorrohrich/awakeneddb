@@ -60,6 +60,71 @@ router.get(
 );
 
 router.get(
+  "/code",
+  query("echoId").notEmpty().isNumeric(),
+  query("magicCardOneId").notEmpty().isNumeric(),
+  query("magicCardTwoId").notEmpty().isNumeric(),
+  query("magicCardThreeId").notEmpty().isNumeric(),
+  query("magicCardFourId").notEmpty().isNumeric(),
+  query("magicCardFiveId").notEmpty().isNumeric(),
+  query("magicCardSixId").notEmpty().isNumeric(),
+  query("magicCardSevenId").notEmpty().isNumeric(),
+  query("magicCardEightId").notEmpty().isNumeric(),
+  query("companionCardOneId").notEmpty().isNumeric(),
+  query("companionCardTwoId").notEmpty().isNumeric(),
+  query("companionCardThreeId").notEmpty().isNumeric(),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+      const {
+        echoId,
+        magicCardOneId,
+        magicCardTwoId,
+        magicCardThreeId,
+        magicCardFourId,
+        magicCardFiveId,
+        magicCardSixId,
+        magicCardSevenId,
+        magicCardEightId,
+        companionCardOneId,
+        companionCardTwoId,
+        companionCardThreeId,
+      } = matchedData(req);
+      const userId = req.userId;
+      req.db
+        .request()
+        .input("Auth0Id", sql.NVarChar(200), userId)
+        .input("EchoId", sql.Int, echoId)
+        .input("MagicCardOneId", sql.Int, magicCardOneId)
+        .input("MagicCardTwoId", sql.Int, magicCardTwoId)
+        .input("MagicCardThreeId", sql.Int, magicCardThreeId)
+        .input("MagicCardFourId", sql.Int, magicCardFourId)
+        .input("MagicCardFiveId", sql.Int, magicCardFiveId)
+        .input("MagicCardSixId", sql.Int, magicCardSixId)
+        .input("MagicCardSevenId", sql.Int, magicCardSevenId)
+        .input("MagicCardEightId", sql.Int, magicCardEightId)
+        .input("CompanionCardOneId", sql.Int, companionCardOneId)
+        .input("CompanionCardTwoId", sql.Int, companionCardTwoId)
+        .input("CompanionCardThreeId", sql.Int, companionCardThreeId)
+        .execute("spDeck_GetCode")
+        .then((result) => {
+          const code = result.recordset[0];
+          if (!code) {
+            return res.status(500).send({ errors: ["Error generating code"] });
+          }
+          res.send(parseDeckResponse(code));
+        })
+        .catch((err) => {
+          logError(err);
+          next(Errors.Database);
+        });
+    } else {
+      res.status(400).send({ errors: errors.array() });
+    }
+  }
+);
+
+router.get(
   "/:deckId",
   param("deckId").notEmpty().isNumeric(),
   (req, res, next) => {
